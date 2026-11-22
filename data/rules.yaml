@@ -112,18 +112,22 @@ priority_rules:
 # «служба, закреплённая за оборудованием в справочнике».
 routing_rules:
   - id: improvement
+    description: Предложения по улучшению рассматривает отдел главного механика
     when: {request_type: improvement}
     department: chief_engineer_office
 
   - id: not_repair
+    description: Обращение не связано с ремонтом
     when: {request_type: other}
     department: dispatcher
 
   - id: control_system
+    description: Неисправность системы управления или связи
     when: {fault_category: control_system}
     department: automation_service
 
   - id: instrumentation
+    description: Неисправность датчика или измерительного прибора
     when: {fault_category: instrumentation}
     department: instrumentation_service
 
@@ -133,10 +137,12 @@ routing_rules:
     department: mobile_equipment_service
 
   - id: electrical
+    description: Электрическая неисправность стационарного оборудования
     when: {fault_category: electrical}
     department: power_service
 
   - id: known_equipment
+    description: Механическая или гидравлическая неисправность — служба, закреплённая за оборудованием
     when: {equipment_known: true, fault_category: [mechanical, hydraulic]}
     department: equipment_default
 

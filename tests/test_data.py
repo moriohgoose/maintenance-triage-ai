@@ -89,6 +89,13 @@ def test_rule_conditions_are_valid(section):
                 assert v in ALLOWED_WHEN_VALUES[field], f"{rule['id']}: недопустимое значение {v}"
 
 
+@pytest.mark.parametrize("section", ["priority_rules", "routing_rules"])
+def test_rules_have_descriptions(section):
+    """Описание правила показывается пользователю как объяснение решения."""
+    for rule in load_rules()[section]:
+        assert rule.get("description"), f"{rule['id']}: нет описания"
+
+
 def test_priority_rules_effects_are_valid():
     priorities = {v.value for v in Priority}
     for rule in load_rules()["priority_rules"]:
