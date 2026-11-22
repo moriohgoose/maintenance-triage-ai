@@ -1,0 +1,18 @@
+# Секреты — никогда не коммитим
+.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Результаты прогонов оценки (генерируются заново)
+eval/results/
+
+# Системные файлы
+.DS_Store
+.idea/
+.vscode/

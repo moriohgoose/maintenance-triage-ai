@@ -1,0 +1,179 @@
+# Правила обработки заявок.
+#
+# Главная идея: модель (LLM) только извлекает факты из текста заявки —
+# состояние оборудования, категорию неисправности, признаки опасности и т.п.
+# Приоритет, ответственная служба и необходимость уточнения вычисляются
+# по правилам из этого файла. Поэтому любое решение можно объяснить:
+# «приоритет высокий, потому что сработало правило X».
+#
+# Правила работают с обобщёнными признаками, а не с конкретными поломками.
+# Поэтому их можно применить и к ситуации, которой нет в справочнике.
+
+# --- Справочные значения ---------------------------------------------------
+
+request_types:
+  malfunction: Неисправность
+  improvement: Предложение по улучшению
+  other: Обращение, не связанное с ремонтом
+
+fault_categories:
+  mechanical: Механическая неисправность (подшипники, валы, ленты, износ, протечки уплотнений)
+  hydraulic: Гидравлика (гидросистема, гидронасосы, рабочая жидкость)
+  electrical: Электрика (питание, электродвигатели, пускатели, защиты)
+  instrumentation: КИПиА (неисправность датчика или измерительного прибора)
+  control_system: Системы управления и связь (контроллеры, терминалы, коды ошибок, связь)
+  unknown: Не удаётся определить по описанию
+
+equipment_states:
+  stopped: Остановлено или не запускается
+  degraded: Работает, но с отклонениями
+  normal: Работает нормально
+  unknown: Состояние не указано
+
+production_impacts:
+  line_stopped: Простаивает производственная линия
+  unit_stopped: Остановлена единица оборудования
+  reduced: Снижена производительность
+  none: Не влияет на производство
+  unknown: Не указано
+
+# --- Приоритеты -----------------------------------------------------------
+
+# Порядок от низшего к высшему — нужен, чтобы «повышать» и «сравнивать» приоритеты.
+priority_order: [low, medium, high, critical]
+
+priorities:
+  critical:
+    label: Критический
+    response_time: до 30 минут
+    description: Авария, угроза безопасности или простой производственной линии
+  high:
+    label: Высокий
+    response_time: до 2 часов
+    description: Критичное оборудование работает с отклонениями или остановлено важное оборудование
+  medium:
+    label: Средний
+    response_time: в течение смены (до 8 часов)
+    description: Отклонения в работе некритичного оборудования
+  low:
+    label: Низкий
+    response_time: в плановом порядке (до 5 рабочих дней)
+    description: Улучшения, плановые работы, обращения без влияния на производство
+
+# Если оборудование не найдено в справочнике, мы не знаем его критичность.
+# Действуем консервативно: считаем его критичным. Лучше завысить приоритет,
+# чем пропустить аварию.
+unknown_equipment_criticality: A
+
+# Базовый приоритет: состояние оборудования × критичность оборудования.
+base_priority:
+  stopped:  {A: critical, B: high,   C: medium}
+  degraded: {A: high,     B: medium, C: low}
+  normal:   {A: low,      B: low,    C: low}
+  unknown:  {A: high,     B: medium, C: medium}
+
+# Корректирующие правила применяются к базовому приоритету по очереди.
+#   when          — условия: все поля должны совпасть со значениями,
+#                   извлечёнными из заявки (список значений означает «любое из»)
+#   set_priority  — установить приоритет
+#   min_priority  — поднять приоритет как минимум до этого уровня
+#   raise_by      — поднять на N ступеней, но не выше max_priority
+priority_rules:
+  - id: request_not_repair
+    description: Обращение не связано с ремонтом — плановый порядок
+    when: {request_type: [improvement, other]}
+    set_priority: low
+
+  - id: safety_risk
+    description: Есть угроза безопасности людей или риск аварии (дым, искрение, запах гари, возгорание, утечка горючих веществ)
+    when: {safety_risk: true}
+    min_priority: critical
+
+  - id: line_stopped
+    description: Простаивает производственная линия
+    when: {production_impact: line_stopped}
+    min_priority: critical
+
+  - id: instrumentation_fault
+    description: Неисправный датчик может вызвать ложную остановку или скрыть реальную аварию
+    when: {fault_category: instrumentation}
+    min_priority: medium
+
+  - id: repeated_request
+    description: Повторное обращение по той же проблеме — ситуация не решена
+    when: {repeated_request: true}
+    raise_by: 1
+    max_priority: high
+
+# --- Маршрутизация --------------------------------------------------------
+
+# Правила проверяются сверху вниз, срабатывает первое подходящее.
+# Специальное значение department: equipment_default означает
+# «служба, закреплённая за оборудованием в справочнике».
+routing_rules:
+  - id: improvement
+    when: {request_type: improvement}
+    department: chief_engineer_office
+
+  - id: not_repair
+    when: {request_type: other}
+    department: dispatcher
+
+  - id: control_system
+    when: {fault_category: control_system}
+    department: automation_service
+
+  - id: instrumentation
+    when: {fault_category: instrumentation}
+    department: instrumentation_service
+
+  - id: mobile_equipment
+    description: Самоходную технику обслуживает своя служба целиком (кроме систем управления и датчиков — см. выше)
+    when: {equipment_department: mobile_equipment_service}
+    department: mobile_equipment_service
+
+  - id: electrical
+    when: {fault_category: electrical}
+    department: power_service
+
+  - id: known_equipment
+    when: {equipment_known: true, fault_category: [mechanical, hydraulic]}
+    department: equipment_default
+
+  - id: mechanical_unknown_equipment
+    description: Механическая неисправность, но оборудование не определено
+    when: {fault_category: [mechanical, hydraulic]}
+    department: mechanical_service
+
+routing_fallback: dispatcher
+
+# --- Уточняющие вопросы ---------------------------------------------------
+
+clarification:
+  # Сколько раз максимум переспрашиваем, прежде чем передать заявку как есть.
+  max_rounds: 2
+
+  # Для критических заявок вопросы не задерживают обработку: заявка уходит
+  # исполнителю сразу, а вопросы передаются ему как «уточнить на месте».
+  skip_for_priorities: [critical]
+
+  # Обращения, не связанные с ремонтом, не уточняем.
+  skip_for_request_types: [other]
+
+  # Шаблоны вопросов. Код определяет, ЧТО нужно уточнить,
+  # модель может переформулировать вопрос естественнее.
+  questions:
+    equipment_missing: >-
+      Уточните, пожалуйста, какое именно оборудование неисправно —
+      код или инвентарный номер (например, Н-204).
+    equipment_ambiguous: >-
+      На объекте «{site}» числится несколько единиц оборудования: {candidates}.
+      О какой из них идёт речь?
+    equipment_not_in_catalog: >-
+      Оборудование {code} не найдено в справочнике. Проверьте, пожалуйста,
+      номер и укажите участок, где оно установлено.
+    symptoms_missing: >-
+      Опишите, пожалуйста, что именно происходит: какие признаки
+      неисправности вы наблюдаете (шум, вибрация, нагрев, не запускается и т.п.)?
+    state_unknown: >-
+      Оборудование сейчас работает или остановлено?

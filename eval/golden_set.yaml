@@ -1,0 +1,374 @@
+# Эталонный набор заявок для проверки качества.
+#
+# Для каждой заявки вручную указан ожидаемый результат обработки.
+# Программа обрабатывает текст, и её ответ сравнивается с эталоном по полям.
+#
+# Как читать поле expected:
+#   equipment_ids        — точный набор кодов оборудования (порядок не важен);
+#                          пустой список — оборудование в тексте не названо
+#   остальные поля       — одно значение или список допустимых значений,
+#                          если заявка честно допускает несколько трактовок
+#   null                 — поле в этой заявке не проверяется
+#
+# source: case — заявки из исходного задания, extra — дополнительные
+# «трудные» случаи, придуманные для проверки устойчивости.
+
+cases:
+  # ======================= Заявки из задания =======================
+
+  - id: 1
+    source: case
+    text: >-
+      На участке №3 насос Н-204 сильно вибрирует и шумит. Пока работает,
+      но боимся, что скоро остановится. Нужно срочно проверить.
+    expected:
+      request_type: malfunction
+      equipment_ids: [Н-204]
+      equipment_state: degraded
+      fault_category: mechanical
+      safety_risk: false
+      priority: high
+      department: mechanical_service
+      needs_clarification: false
+    notes: >-
+      Критичный насос (A) работает с отклонениями → высокий. Слово «срочно»
+      само по себе приоритет не повышает, решают факты.
+
+  - id: 2
+    source: case
+    text: >-
+      Конвейер КЛ-12 периодически останавливается без видимых причин.
+      После перезапуска работает нормально, но через 20–30 минут проблема повторяется.
+    expected:
+      request_type: malfunction
+      equipment_ids: [КЛ-12]
+      equipment_state: degraded
+      fault_category: [electrical, control_system, unknown]
+      safety_risk: false
+      priority: medium
+      department: [power_service, automation_service, dispatcher]
+      needs_clarification: false
+    notes: >-
+      Неоднозначная заявка: периодические остановки бывают из-за защит (электрика),
+      датчиков или системы управления. Принимаем несколько трактовок.
+
+  - id: 3
+    source: case
+    text: >-
+      На экскаваторе ЭКГ-10 появился перегрев гидравлической системы.
+      Температура поднимается выше обычной, особенно при высокой нагрузке.
+    expected:
+      request_type: malfunction
+      equipment_ids: [ЭКГ-10]
+      equipment_state: degraded
+      fault_category: hydraulic
+      safety_risk: false
+      priority: high
+      department: mobile_equipment_service
+      needs_clarification: false
+    notes: Основной экскаватор (A) работает с отклонениями → высокий.
+
+  - id: 4
+    source: case
+    text: >-
+      Не запускается компрессор КМ-07. При включении слышен щелчок,
+      но двигатель не стартует. Вчера всё работало.
+    expected:
+      request_type: malfunction
+      equipment_ids: [КМ-07]
+      equipment_state: stopped
+      fault_category: electrical
+      safety_risk: false
+      priority: high
+      department: power_service
+      needs_clarification: false
+    notes: >-
+      Щелчок без старта — типичный признак проблемы пускателя или питания.
+      Оборудование B остановлено → высокий.
+
+  - id: 5
+    source: case
+    text: >-
+      В вентиляционной установке ВУ-15 заметно снизилась производительность.
+      Воздуха поступает меньше обычного, хотя оборудование работает.
+    expected:
+      request_type: malfunction
+      equipment_ids: [ВУ-15]
+      equipment_state: degraded
+      fault_category: mechanical
+      safety_risk: false
+      priority: medium
+      department: mechanical_service
+      needs_clarification: false
+    notes: Вероятные причины — фильтры, ремни, засор. Оборудование B → средний.
+
+  - id: 6
+    source: case
+    text: >-
+      На участке дробления дробилка ДР-02 издаёт сильный металлический стук.
+      Оператор остановил оборудование до выяснения причин.
+    expected:
+      request_type: malfunction
+      equipment_ids: [ДР-02]
+      equipment_state: stopped
+      fault_category: mechanical
+      safety_risk: null
+      priority: critical
+      department: mechanical_service
+      needs_clarification: false
+    notes: >-
+      Критичная дробилка (A) остановлена → критический при любой оценке
+      безопасности, поэтому safety_risk не проверяем.
+
+  - id: 7
+    source: case
+    text: >-
+      Погрузчик ПГ-08 начал терять мощность при подъёме груза.
+      Без нагрузки работает нормально. Ошибок на панели нет.
+    expected:
+      request_type: malfunction
+      equipment_ids: [ПГ-08]
+      equipment_state: degraded
+      fault_category: [hydraulic, mechanical]
+      safety_risk: false
+      priority: medium
+      department: mobile_equipment_service
+      needs_clarification: false
+    notes: Причина может быть в гидравлике или в двигателе — допустимы обе.
+
+  - id: 8
+    source: case
+    text: >-
+      На насосной станции периодически падает давление.
+      Не можем понять, какой именно насос вызывает проблему.
+    expected:
+      request_type: malfunction
+      equipment_ids: []
+      equipment_state: degraded
+      fault_category: [hydraulic, mechanical, unknown]
+      safety_risk: false
+      priority: high
+      department: [mechanical_service, dispatcher]
+      needs_clarification: true
+    notes: >-
+      Оборудование не определено. Программа должна спросить, какая станция
+      и какой насос. Критичность неизвестна → считаем A → высокий.
+
+  - id: 9
+    source: case
+    text: >-
+      Датчик температуры на конвейере КЛ-05 показывает 120 °C, хотя оборудование
+      на ощупь не перегрето. Возможно, неисправен датчик.
+    expected:
+      request_type: malfunction
+      equipment_ids: [КЛ-05]
+      equipment_state: [normal, degraded]
+      fault_category: instrumentation
+      safety_risk: false
+      priority: medium
+      department: instrumentation_service
+      needs_clarification: false
+    notes: >-
+      Неисправен датчик, а не конвейер, поэтому заявка уходит в КИПиА.
+      Правило instrumentation_fault поднимает приоритет минимум до среднего.
+
+  - id: 10
+    source: case
+    text: >-
+      После технического обслуживания двигатель ДВ-11 стал работать нестабильно.
+      Обороты плавают, иногда двигатель глохнет.
+    expected:
+      request_type: malfunction
+      equipment_ids: [ДВ-11]
+      equipment_state: degraded
+      fault_category: [mechanical, electrical]
+      safety_risk: false
+      priority: medium
+      department: [mechanical_service, power_service]
+      needs_clarification: false
+    notes: Важен признак «после ТО» — рекомендация должна предложить проверить работы ТО.
+
+  - id: 11
+    source: case
+    text: >-
+      На участке №5 снова проблемы с оборудованием. Вчера уже обращались,
+      сегодня ситуация ухудшилась. Просим разобраться.
+    expected:
+      request_type: malfunction
+      equipment_ids: []
+      equipment_state: [degraded, unknown]
+      fault_category: unknown
+      safety_risk: false
+      priority: high
+      department: dispatcher
+      needs_clarification: true
+    notes: >-
+      Нет ни оборудования, ни симптомов. Программа должна спросить, о каком
+      оборудовании речь (на участке №5 числятся КЛ-14 и Н-210) и что происходит.
+
+  - id: 12
+    source: case
+    text: >-
+      В системе охлаждения компрессора КМ-12 обнаружена утечка жидкости.
+      Пока небольшая, оборудование продолжает работать.
+    expected:
+      request_type: malfunction
+      equipment_ids: [КМ-12]
+      equipment_state: degraded
+      fault_category: [mechanical, hydraulic]
+      safety_risk: false
+      priority: medium
+      department: mechanical_service
+      needs_clarification: false
+    notes: Охлаждающая жидкость не горючая, утечка небольшая → средний.
+
+  - id: 13
+    source: case
+    text: >-
+      На буровой установке БУ-04 периодически пропадает связь с системой управления.
+      Оператор вынужден перезапускать терминал.
+    expected:
+      request_type: malfunction
+      equipment_ids: [БУ-04]
+      equipment_state: degraded
+      fault_category: control_system
+      safety_risk: false
+      priority: medium
+      department: automation_service
+      needs_clarification: false
+    notes: Буровая — самоходная техника, но проблема со связью, поэтому АСУ ТП.
+
+  - id: 14
+    source: case
+    text: >-
+      Конвейер КЛ-09 работает нормально, но сотрудники предлагают заменить привод
+      на более современный, чтобы снизить энергопотребление.
+    expected:
+      request_type: improvement
+      equipment_ids: [КЛ-09]
+      equipment_state: normal
+      fault_category: null
+      safety_risk: false
+      priority: low
+      department: chief_engineer_office
+      needs_clarification: false
+    notes: Это не неисправность, а предложение по улучшению.
+
+  - id: 15
+    source: case
+    text: >-
+      На дробильном участке одновременно остановились конвейер КЛ-03 и дробилка ДР-06.
+      На панели управления появились ошибки, но их коды неизвестны.
+      Производственная линия простаивает.
+    expected:
+      request_type: malfunction
+      equipment_ids: [КЛ-03, ДР-06]
+      equipment_state: stopped
+      fault_category: [control_system, electrical, unknown]
+      safety_risk: false
+      priority: critical
+      department: [automation_service, power_service, dispatcher]
+      needs_clarification: false
+    notes: >-
+      Простой линии → критический. Коды ошибок неизвестны, но критическую
+      заявку не задерживаем вопросами: бригада выясняет коды на месте.
+
+  # ================ Дополнительные «трудные» случаи ================
+
+  - id: 16
+    source: extra
+    text: >-
+      На участке №7 у насоса Н-999 течёт сальник, под насосом лужа.
+    expected:
+      request_type: malfunction
+      equipment_ids: [Н-999]
+      equipment_state: degraded
+      fault_category: mechanical
+      safety_risk: false
+      priority: high
+      department: mechanical_service
+      needs_clarification: true
+    notes: >-
+      Оборудования нет в справочнике. Программа должна попросить проверить номер
+      и консервативно считать оборудование критичным.
+
+  - id: 17
+    source: extra
+    text: >-
+      В шкафу управления конвейера КЛ-12 искрит и пахнет гарью. Конвейер пока работает.
+    expected:
+      request_type: malfunction
+      equipment_ids: [КЛ-12]
+      equipment_state: degraded
+      fault_category: electrical
+      safety_risk: true
+      priority: critical
+      department: power_service
+      needs_clarification: false
+    notes: >-
+      Ситуации нет в справочнике, но признаки (искрение, гарь) дают угрозу
+      безопасности → критический, хотя оборудование работает.
+
+  - id: 18
+    source: extra
+    text: >-
+      кампрессор км7 опять не заводится, щелкает и всё
+    expected:
+      request_type: malfunction
+      equipment_ids: [КМ-07]
+      equipment_state: stopped
+      fault_category: electrical
+      safety_risk: false
+      priority: high
+      department: power_service
+      needs_clarification: false
+    notes: >-
+      Опечатки и неформальная запись кода («км7» вместо «КМ-07»).
+      «Опять» — повторное обращение.
+
+  - id: 19
+    source: extra
+    text: >-
+      Сломалось, приходите.
+    expected:
+      request_type: malfunction
+      equipment_ids: []
+      equipment_state: unknown
+      fault_category: unknown
+      safety_risk: false
+      priority: null
+      department: dispatcher
+      needs_clarification: true
+    notes: Информации нет совсем — главное, чтобы программа задала вопросы.
+
+  - id: 20
+    source: extra
+    text: >-
+      СРОЧНО!!! С ВУ-15 что-то не так, сделайте уже что-нибудь!!!
+    expected:
+      request_type: malfunction
+      equipment_ids: [ВУ-15]
+      equipment_state: unknown
+      fault_category: unknown
+      safety_risk: false
+      priority: medium
+      department: [mechanical_service, dispatcher]
+      needs_clarification: true
+    notes: >-
+      Эмоции и заглавные буквы не должны повышать приоритет. Симптомы
+      не описаны — нужно уточнение.
+
+  - id: 21
+    source: extra
+    text: >-
+      Подскажите, кто отвечает за выдачу спецодежды на участке №3?
+    expected:
+      request_type: other
+      equipment_ids: []
+      equipment_state: null
+      fault_category: null
+      safety_risk: false
+      priority: low
+      department: dispatcher
+      needs_clarification: false
+    notes: Обращение не про ремонт — передаём диспетчеру, не уточняем.
